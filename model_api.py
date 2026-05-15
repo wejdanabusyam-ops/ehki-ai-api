@@ -3,10 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import joblib
 import google.generativeai as genai
-import pyodbc
 import json
-
 import os
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
@@ -14,17 +13,6 @@ gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 
 model = joblib.load("model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")
-
-conn_str = (
-    "DRIVER={ODBC Driver 18 for SQL Server};"
-    "SERVER=(localdb)\\MSSQLLocalDB;"
-    "DATABASE=Ehki_FinalDatabase;"
-    "Trusted_Connection=yes;"
-    "TrustServerCertificate=yes;"
-)
-
-def get_connection():
-    return pyodbc.connect(conn_str)
 
 app = FastAPI()
 
@@ -35,6 +23,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+memory_store = {}
+profile_store = {}
 
 class RequestData(BaseModel):
     user_id: str
@@ -55,108 +46,61 @@ app_features = """
 مساحة آمنة للتعبير عن المشاعر، تشمل محادثات خاصة مع الطبيب، جلسات فردية صوتية، جلسات جماعية، ومجتمع للدعم والنقاش.
 
 2. الشات الآمن مع الطبيب:
-مناسب عندما يحتاج المستخدم متابعة مع مختص أو يريد الحديث بشكل خاص. الشات نصي فقط لحماية الخصوصية، ولا يسمح بإرسال الصور أو الملفات أو الموقع.
+مناسب عندما يحتاج المستخدم متابعة مع مختص أو يريد الحديث بشكل خاص. الشات نصي فقط لحماية الخصوصية.
 
 3. الجلسات الفردية:
-مناسبة عندما تكون المشكلة متكررة أو تؤثر على النوم أو الدراسة أو العلاقات أو الحياة اليومية. يمكن حجز جلسة مع مختص وتحديد وقت وتاريخ ومتابعة الحالة.
+مناسبة عندما تكون المشكلة متكررة أو تؤثر على النوم أو الدراسة أو العلاقات أو الحياة اليومية.
 
 4. الجلسات الجماعية:
-مناسبة عندما يشعر المستخدم بالوحدة أو يريد دعمًا من أشخاص يمرون بتجارب مشابهة، ضمن جلسات نقاش جماعي بإشراف مختص.
+مناسبة عندما يشعر المستخدم بالوحدة أو يريد دعمًا من أشخاص يمرون بتجارب مشابهة.
 
-5. AI Chat:
-مناسب للدعم المبدئي، تنظيم الأفكار، واقتراح خطوات مؤقتة. لا يقدم تشخيصًا طبيًا ولا يغني عن المختص.
+5. المقالات النفسية:
+مناسبة عندما يسأل المستخدم عن معلومات حول القلق، التوتر، الحزن، النوم، أو المشاعر.
 
-6. المقالات النفسية:
-مناسبة عندما يسأل المستخدم عن معلومات حول القلق، التوتر، الحزن، النوم، المشاعر، أو يريد فهم حالته بشكل أوسع.
+6. التمارين النفسية:
+تشمل تمارين تنفس، تمارين تفاعلية، وتمارين فيديو. مناسبة للتوتر، القلق، التفكير الزائد، وصعوبة النوم.
 
-7. التمارين النفسية:
-تشمل تمارين تنفس، تمارين تفاعلية، وتمارين فيديو. مناسبة للتوتر، القلق، التفكير الزائد، صعوبة النوم، أو الحاجة لتهدئة سريعة.
+7. الدورات:
+مناسبة عندما يريد المستخدم تعلم مهارات نفسية على فترة أطول.
 
-8. الدورات:
-مناسبة عندما يريد المستخدم تعلم مهارات نفسية على فترة أطول، مثل التعامل مع الضغط، تنظيم المشاعر، أو تحسين الوعي النفسي.
-
-9. الخطط العلاجية:
-مناسبة عندما تكون المشكلة متكررة أو تحتاج متابعة منظمة من خلال مراحل وأهداف وأسئلة شائعة ومختصين مرتبطين بالخطة.
-
-10. الإشعارات:
-يمكن استخدامها لتذكير المستخدم بالجلسات، الردود الجديدة، أو متابعة المحتوى والخطط.
+8. الخطط العلاجية:
+مناسبة عندما تكون المشكلة متكررة أو تحتاج متابعة منظمة من خلال مراحل وأهداف.
 
 قواعد اقتراح ميزات التطبيق:
 - لا تقترح كل الميزات دفعة واحدة.
 - اقترح ميزة واحدة أو ميزتين فقط حسب الحالة.
 - اجعل الاقتراح طبيعيًا داخل الرد وليس كإعلان.
 - لا تقل إن التطبيق سيعالج المستخدم نهائيًا.
-- إذا كانت الحالة طارئة أو فيها إيذاء للنفس، الأولوية للسلامة والتواصل مع شخص قريب أو طوارئ أو مختص.
+- إذا كانت الحالة طارئة، الأولوية للسلامة والتواصل مع شخص قريب أو طوارئ أو مختص.
 """
 
 def save_message(user_id, sender, message_text):
-    conn = get_connection()
-    cursor = conn.cursor()
+    if user_id not in memory_store:
+        memory_store[user_id] = []
 
-    cursor.execute(
-        """
-        INSERT INTO ai_chat_messages (user_id, sender, message_text)
-        VALUES (?, ?, ?)
-        """,
-        user_id,
-        sender,
-        message_text
-    )
-
-    conn.commit()
-    conn.close()
+    memory_store[user_id].append({
+        "sender": sender,
+        "text": message_text
+    })
 
 def get_recent_memory(user_id, limit=8):
-    conn = get_connection()
-    cursor = conn.cursor()
+    if user_id not in memory_store:
+        return ""
 
-    cursor.execute(
-        """
-        SELECT TOP (?) sender, message_text
-        FROM ai_chat_messages
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        """,
-        limit,
-        user_id
-    )
-
-    rows = cursor.fetchall()
-    conn.close()
-
-    rows.reverse()
-
+    messages = memory_store[user_id][-limit:]
     memory_text = ""
 
-    for row in rows:
-        sender = row[0]
-        text = row[1]
-
-        if sender == "user":
-            memory_text += f"المستخدم: {text}\n"
+    for msg in messages:
+        if msg["sender"] == "user":
+            memory_text += f"المستخدم: {msg['text']}\n"
         else:
-            memory_text += f"أنيس: {text}\n"
+            memory_text += f"أنيس: {msg['text']}\n"
 
     return memory_text
 
 def get_user_profile(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        SELECT name, main_issue, triggers, sleep_notes, last_summary
-        FROM ai_user_profiles
-        WHERE user_id = ?
-        """,
-        user_id
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    if not row:
-        return {
+    if user_id not in profile_store:
+        profile_store[user_id] = {
             "name": "",
             "main_issue": "",
             "triggers": "",
@@ -164,57 +108,19 @@ def get_user_profile(user_id):
             "last_summary": ""
         }
 
-    return {
-        "name": row[0] or "",
-        "main_issue": row[1] or "",
-        "triggers": row[2] or "",
-        "sleep_notes": row[3] or "",
-        "last_summary": row[4] or ""
-    }
+    return profile_store[user_id]
 
 def save_or_update_profile(user_id, profile):
-    conn = get_connection()
-    cursor = conn.cursor()
+    if user_id not in profile_store:
+        profile_store[user_id] = profile
+    else:
+        old_profile = profile_store[user_id]
 
-    cursor.execute(
-        """
-        IF EXISTS (SELECT 1 FROM ai_user_profiles WHERE user_id = ?)
-        BEGIN
-            UPDATE ai_user_profiles
-            SET
-                name = COALESCE(NULLIF(?, ''), name),
-                main_issue = COALESCE(NULLIF(?, ''), main_issue),
-                triggers = COALESCE(NULLIF(?, ''), triggers),
-                sleep_notes = COALESCE(NULLIF(?, ''), sleep_notes),
-                last_summary = COALESCE(NULLIF(?, ''), last_summary),
-                updated_at = GETDATE()
-            WHERE user_id = ?
-        END
-        ELSE
-        BEGIN
-            INSERT INTO ai_user_profiles
-            (user_id, name, main_issue, triggers, sleep_notes, last_summary)
-            VALUES (?, ?, ?, ?, ?, ?)
-        END
-        """,
-        user_id,
-        profile.get("name", ""),
-        profile.get("main_issue", ""),
-        profile.get("triggers", ""),
-        profile.get("sleep_notes", ""),
-        profile.get("last_summary", ""),
-        user_id,
+        for key in profile:
+            if profile[key] != "":
+                old_profile[key] = profile[key]
 
-        user_id,
-        profile.get("name", ""),
-        profile.get("main_issue", ""),
-        profile.get("triggers", ""),
-        profile.get("sleep_notes", ""),
-        profile.get("last_summary", "")
-    )
-
-    conn.commit()
-    conn.close()
+        profile_store[user_id] = old_profile
 
 def extract_profile_info(user_message, ai_reply, old_profile):
     prompt = f"""
@@ -267,7 +173,7 @@ def extract_profile_info(user_message, ai_reply, old_profile):
 
 @app.get("/")
 def home():
-    return {"status": "API is running"}
+    return {"status": "API is running on Render"}
 
 @app.post("/chat")
 def chat(data: RequestData):
@@ -328,14 +234,13 @@ def chat(data: RequestData):
 
 قواعد مهمة عند اقتراح ميزات التطبيق:
 - لا تقترح ميزة من التطبيق في كل رد.
-- اقترحها فقط عندما تكون مفيدة فعلًا لحالة المستخدم.
-- لا تقترح أكثر من ميزتين في الرد الواحد.
+- اقترحها فقط عندما تكون مفيدة فعلًا.
+- لا تقترح أكثر من ميزتين.
 - إذا المستخدم يحتاج معلومات، اقترح المقالات.
-- إذا يحتاج تهدئة أو توتر أو نوم، اقترح التمارين النفسية أو Safe Space.
-- إذا المشكلة متكررة أو مؤثرة على حياته اليومية، اقترح الخطط العلاجية أو الجلسة الفردية.
+- إذا يحتاج تهدئة أو نوم، اقترح التمارين النفسية أو Safe Space.
+- إذا المشكلة متكررة أو مؤثرة، اقترح الخطط العلاجية أو الجلسة الفردية.
 - إذا يشعر بالوحدة، يمكن اقتراح الجلسات الجماعية أو المجتمع داخل Safe Space.
 - إذا يريد متابعة خاصة، يمكن اقتراح الشات الآمن مع الطبيب.
-- اجعل الاقتراح طبيعيًا ومختصرًا.
 
 إذا كان التصنيف emergency:
 - ركّز على السلامة فورًا.

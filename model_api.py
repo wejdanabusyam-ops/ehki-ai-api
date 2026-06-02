@@ -6,9 +6,13 @@ import google.generativeai as genai
 import json
 import os
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+if not GEMINI_API_KEY:
+    raise ValueError("Gemini API key is missing. Set GEMINI_API_KEY or GOOGLE_API_KEY.")
 
 genai.configure(api_key=GEMINI_API_KEY)
+
 gemini_model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
 model = joblib.load("model.pkl")
@@ -274,16 +278,20 @@ def chat(data: RequestData):
 
         save_message(data.user_id, "ai", reply)
 
-        new_profile_info = extract_profile_info(
-            data.text,
-            reply,
-            user_profile
-        )
-
-        save_or_update_profile(data.user_id, new_profile_info)
+        # Profile extraction disabled to reduce Gemini requests during demo
+        # new_profile_info = extract_profile_info(data.text, reply, user_profile)
+        # save_or_update_profile(data.user_id, new_profile_info)
 
         return {"reply": reply}
 
     except Exception as e:
         print("ERROR:", e)
-        return {"reply": f"حدث خطأ: {str(e)}"}
+
+        if "429" in str(e):
+            return {
+                "reply": "أنيس مشغول حاليًا، جرّب مرة أخرى بعد قليل."
+            }
+
+        return {
+            "reply": "حدث خطأ مؤقت، حاول مرة أخرى لاحقًا."
+        }

@@ -2,16 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import joblib
-import json
 import os
 import requests
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-if not OPENROUTER_API_KEY:
-    raise ValueError("OPENROUTER_API_KEY is missing.")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY is missing.")
 
-OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+GROQ_MODEL = "llama-3.1-8b-instant"
 
 model = joblib.load("model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")
@@ -59,22 +58,20 @@ app_features = """
 - لا تقل إن التطبيق يعالج نهائيًا.
 """
 
-def call_openrouter(prompt):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+def call_groq(prompt):
+    url = "https://api.groq.com/openai/v1/chat/completions"
 
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://ehki-ai.onrender.com",
-        "X-Title": "Ehki AI"
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
     }
 
     payload = {
-        "model": OPENROUTER_MODEL,
+        "model": GROQ_MODEL,
         "messages": [
             {
                 "role": "system",
-                "content": "You are Anis, an Arabic mental health support assistant. Always answer in Arabic."
+                "content": "أنت أنيس، مساعد ذكي داعم داخل تطبيق احكِ. أجب دائمًا باللغة العربية فقط، ولا تقدم تشخيصًا طبيًا."
             },
             {
                 "role": "user",
@@ -82,10 +79,15 @@ def call_openrouter(prompt):
             }
         ],
         "temperature": 0.8,
-        "max_tokens": 350
+        "max_tokens": 450
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=60)
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload,
+        timeout=60
+    )
 
     if response.status_code != 200:
         raise Exception(response.text)
@@ -131,7 +133,7 @@ def get_user_profile(user_id):
 
 @app.get("/")
 def home():
-    return {"status": "API is running with OpenRouter"}
+    return {"status": "API is running with Groq"}
 
 @app.post("/chat")
 def chat(data: RequestData):
@@ -210,7 +212,7 @@ def chat(data: RequestData):
 {data.text}
 """
 
-        reply = call_openrouter(prompt)
+        reply = call_groq(prompt)
 
         save_message(data.user_id, "ai", reply)
 

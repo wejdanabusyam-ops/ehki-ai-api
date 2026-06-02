@@ -11,7 +11,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
     raise ValueError("OPENROUTER_API_KEY is missing.")
 
-OPENROUTER_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
 model = joblib.load("model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")

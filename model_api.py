@@ -123,7 +123,7 @@ def call_groq(prompt):
             }
         ],
         "temperature": 0.9,
-        "max_tokens": 450
+        "max_tokens": 180
     }
 
     response = requests.post(
@@ -148,7 +148,7 @@ def save_message(user_id, sender, message_text):
         "text": message_text
     })
 
-def get_recent_memory(user_id, limit=8):
+def get_recent_memory(user_id, limit=3):
     if user_id not in memory_store:
         return ""
 
@@ -181,7 +181,9 @@ def home():
 
 @app.post("/chat")
 def chat(data: RequestData):
+    
     try:
+        
         vec = vectorizer.transform([data.text])
         prediction = model.predict(vec)[0]
 

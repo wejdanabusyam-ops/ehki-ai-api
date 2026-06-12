@@ -5,6 +5,7 @@ import joblib
 import os
 import requests
 import random
+import re
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -80,6 +81,10 @@ greeting_replies = [
     "أهلًا ✨ كيف الأمور معك؟",
     "هاي 🌸"
 ]
+def clean_reply(text):
+    allowed = r'[^\u0600-\u06FFa-zA-Z0-9\s\.,!?،؛:\-()"\']'
+    text = re.sub(allowed, '', text)
+    return text.strip()
 
 
 def call_groq(prompt):
@@ -127,6 +132,8 @@ def call_groq(prompt):
 - تجنب الترجمة الحرفية.
 - لا تستخدم مصطلحات تقنية أو أكاديمية إلا عند الحاجة.
 - لا تكتب قوائم أو نقاط إلا إذا طلب المستخدم ذلك.
+- استخدم العربية فقط في الرد.
+- لا تستخدم أي أحرف أو رموز من لغات أخرى.
 
 إذا كانت الرسالة مجرد تحية:
 - رد بتحية طبيعية قصيرة.
@@ -147,7 +154,7 @@ def call_groq(prompt):
                 "content": prompt
             }
         ],
-        "temperature": 0.6,
+        "temperature": 0.4,
         "max_tokens": 180
     }
 
@@ -284,6 +291,10 @@ def chat(data: RequestData):
 """
 
         reply = call_groq(prompt).strip()
+        reply = clean_reply(reply)
+
+        if len(reply) < 2:
+         reply = "هل يمكنك توضيح ما تريد قوله أكثر؟"
 
         if len(reply) > 500:
             reply = reply[:500]
